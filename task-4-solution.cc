@@ -112,10 +112,14 @@ private:
 
 
 
-template <int dim, typename Number>
-void
-test()
+int
+main(int argc, char **argv)
 {
+  Utilities::MPI::MPI_InitFinalize mpi_initialization(argc, argv, 1);
+
+  using Number = double;
+  const unsigned int dim = 2;
+
   Parameters params;
 
   ConvergenceTable table;
@@ -433,15 +437,4 @@ test()
 
   if (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
     table.write_text(std::cout);
-}
-
-
-
-int
-main(int argc, char **argv)
-{
-  Utilities::MPI::MPI_InitFinalize mpi_initialization(argc, argv, 1);
-
-  test<2, double>();
-
 }
