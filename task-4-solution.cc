@@ -49,13 +49,13 @@ main(int argc, char **argv)
 {
   Utilities::MPI::MPI_InitFinalize mpi_initialization(argc, argv, 1);
 
-  using Number = double;
-  const unsigned int dim = 2;
-  const unsigned int fe_degree_p = 1;
-  const unsigned int fe_degree_v = 2;
-  const unsigned int n_refinements  = 4;
-  const bool compute_error_solution = true;
-  const bool output_paraview        = true;
+  using Number                              = double;
+  const unsigned int dim                    = 2;
+  const unsigned int fe_degree_p            = 1;
+  const unsigned int fe_degree_v            = 2;
+  const unsigned int n_refinements          = 4;
+  const bool         compute_error_solution = true;
+  const bool         output_paraview        = true;
 
   ConvergenceTable table;
 
@@ -68,10 +68,7 @@ main(int argc, char **argv)
                            Utilities::MPI::this_mpi_process(comm) == 0);
 
   MappingQ1<dim> mapping;
-  FESystem<dim>  fe(FE_Q<dim>(fe_degree_v),
-                   dim,
-                   FE_Q<dim>(fe_degree_p),
-                   1);
+  FESystem<dim>  fe(FE_Q<dim>(fe_degree_v), dim, FE_Q<dim>(fe_degree_p), 1);
   QGauss<dim>    quadrature(fe_degree_v + 1);
 
   parallel::distributed::Triangulation<dim> triangulation(comm);
@@ -165,9 +162,6 @@ main(int argc, char **argv)
   LinearAlgebra::distributed::Vector<double> rhs(partitioner);
   LinearAlgebra::distributed::Vector<double> solution(partitioner);
 
-  VectorTools::create_right_hand_side(
-    mapping, dof_handler, quadrature, *rhs_func, rhs, constraints);
-
   // element-stiffness matrix definition
   FEValues<dim>              fe_values(mapping,
                           fe,
@@ -177,35 +171,39 @@ main(int argc, char **argv)
   FEValuesViews::Vector<dim> velocities(fe_values, 0);
   FEValuesViews::Scalar<dim> pressure(fe_values, dim);
 
-  if (fe_degree_v == fe_degree_p)
-    for (const auto &cell : dof_handler.active_cell_iterators())
-      if (cell->is_locally_owned())
-        {
-          fe_values.reinit(cell);
+  for (const auto &cell : dof_handler.active_cell_iterators())
+    if (cell->is_locally_owned())
+      {
+        fe_values.reinit(cell);
 
-          const double delta_1 = cell->minimum_vertex_distance();
+        const double delta_1 = cell->minimum_vertex_distance();
 
-          Vector<double>                       rhs_local(fe.n_dofs_per_cell());
-          std::vector<types::global_dof_index> indices(fe.n_dofs_per_cell());
+        Vector<double>                       rhs_local(fe.n_dofs_per_cell());
+        std::vector<types::global_dof_index> indices(fe.n_dofs_per_cell());
 
-          cell->get_dof_indices(indices);
+        cell->get_dof_indices(indices);
 
-          for (const unsigned int q : fe_values.quadrature_point_indices())
-            {
-              const auto JxW   = fe_values.JxW(q);
-              const auto point = fe_values.quadrature_point(q);
+        for (const unsigned int q : fe_values.quadrature_point_indices())
+          {
+            const auto JxW   = fe_values.JxW(q);
+            const auto point = fe_values.quadrature_point(q);
 
-              Tensor<1, dim> source;
-              for (unsigned int d = 0; d < dim; ++d)
-                source[d] = rhs_func->value(point, d);
+            Tensor<1, dim> source;
+            for (unsigned int d = 0; d < dim; ++d)
+              source[d] = rhs_func->value(point, d);
 
-              for (const unsigned int i : fe_values.dof_indices())
-                rhs_local(i) +=
-                  delta_1 * source * pressure.gradient(i, q) * JxW;
-            }
+            for (const unsigned int i : fe_values.dof_indices())
+              {
+                rhs_local(i) += source * velocities.value(i, q) * JxW;
 
-          constraints.distribute_local_to_global(rhs_local, indices, rhs);
-        }
+                if (fe_degree_v == fe_degree_p)
+                  rhs_local(i) +=
+                    delta_1 * source * pressure.gradient(i, q) * JxW;
+              }
+          }
+
+        constraints.distribute_local_to_global(rhs_local, indices, rhs);
+      }
 
   TrilinosWrappers::SparsityPattern sparsity_pattern;
   sparsity_pattern.reinit(dof_handler.locally_owned_dofs(),
@@ -226,9 +224,8 @@ main(int argc, char **argv)
 
         cell->get_dof_indices(indices);
 
-        const double delta_1 = (fe_degree_v == fe_degree_p) ?
-                                 cell->minimum_vertex_distance() :
-                                 0.0;
+        const double delta_1 =
+          (fe_degree_v == fe_degree_p) ? cell->minimum_vertex_distance() : 0.0;
 
         for (const unsigned int q : fe_values.quadrature_point_indices())
           {
@@ -302,8 +299,6 @@ main(int argc, char **argv)
 
       solution.zero_out_ghost_values();
 
-      pcout << "error (solution): " << error_u << " " << error_p << std::endl;
-
       table.add_value("error_u", error_u);
       table.set_scientific("error_u", true);
       table.add_value("error_p", error_p);
@@ -340,8 +335,8 @@ main(int argc, char **argv)
 
       // add expected solution
       DoFHandler<dim> dof_handler_solution(triangulation);
-      dof_handler_solution.distribute_dofs(FESystem<dim>(
-        FE_Q<dim>(fe_degree_v), dim, FE_Q<dim>(fe_degree_p), 1));
+      dof_handler_solution.distribute_dofs(
+        FESystem<dim>(FE_Q<dim>(fe_degree_v), dim, FE_Q<dim>(fe_degree_p), 1));
 
       LinearAlgebra::distributed::Vector<double> analytical_solution(
         std::make_shared<const Utilities::MPI::Partitioner>(
