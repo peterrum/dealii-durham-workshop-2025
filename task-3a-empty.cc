@@ -24,7 +24,6 @@
 #include <deal.II/grid/grid_generator.h>
 
 #include <deal.II/lac/dynamic_sparsity_pattern.h>
-#include <deal.II/lac/la_vector.h>
 #include <deal.II/lac/precondition.h>
 #include <deal.II/lac/solver_cg.h>
 #include <deal.II/lac/solver_control.h>
