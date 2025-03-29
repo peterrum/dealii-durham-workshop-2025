@@ -71,7 +71,6 @@ struct Parameters
   double       eps            = 0.3;
 
   // experiments
-  bool print_parameters       = false;
   bool compute_error_solution = true;
   bool output_paraview        = true;
 
@@ -85,24 +84,6 @@ struct Parameters
     add_parameters(prm);
 
     prm.parse_input(file_name, "", true);
-  }
-
-  void
-  print()
-  {
-    ConditionalOStream pcout(std::cout,
-                             Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) ==
-                               0);
-
-    dealii::ParameterHandler prm;
-    add_parameters(prm);
-
-    if (pcout.is_active())
-      prm.print_parameters(pcout.get_stream(),
-                           ParameterHandler::OutputStyle::JSON |
-                             ParameterHandler::OutputStyle::Short |
-                             ParameterHandler::KeepDeclarationOrder);
-    pcout << std::endl << std::endl;
   }
 
 private:
@@ -123,7 +104,6 @@ private:
 
     // settings of experiments
     prm.enter_subsection("experiments");
-    prm.add_parameter("print parameters", print_parameters);
     prm.add_parameter("output paraview", output_paraview);
     prm.add_parameter("compute error solution", compute_error_solution);
     prm.leave_subsection();
@@ -457,28 +437,10 @@ main(int argc, char **argv)
 {
   Utilities::MPI::MPI_InitFinalize mpi_initialization(argc, argv, 1);
 
-  if ((argc == 2) && (std::string(argv[1]) == "--help"))
-    {
-      Parameters params;
-      params.print();
-
-      return 0;
-    }
-
   ConvergenceTable table;
 
   test<2, double>(table);
 
   if (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
-    {
-      if ((argc > 2))
-        {
-          table.write_text(std::cout);
-          std::cout << std::endl;
-        }
-      else
-        {
-          std::cout << std::endl << std::endl;
-        }
-    }
+    table.write_text(std::cout);
 }
