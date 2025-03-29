@@ -114,9 +114,11 @@ private:
 
 template <int dim, typename Number>
 void
-test(ConvergenceTable &table)
+test()
 {
   Parameters params;
+
+  ConvergenceTable table;
 
   // general
   using VectorType = LinearAlgebra::distributed::Vector<Number>;
@@ -428,6 +430,9 @@ test(ConvergenceTable &table)
         DataOut<dim>::CurvedCellRegion::curved_inner_cells);
       data_out.write_vtu_in_parallel("stokes.vtu", comm);
     }
+
+  if (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
+    table.write_text(std::cout);
 }
 
 
@@ -437,10 +442,6 @@ main(int argc, char **argv)
 {
   Utilities::MPI::MPI_InitFinalize mpi_initialization(argc, argv, 1);
 
-  ConvergenceTable table;
+  test<2, double>();
 
-  test<2, double>(table);
-
-  if (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
-    table.write_text(std::cout);
 }
