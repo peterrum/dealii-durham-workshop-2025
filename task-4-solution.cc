@@ -1,32 +1,17 @@
-// ------------------------------------------------------------------------
+// ---------------------------------------------------------------------
 //
-// SPDX-License-Identifier: LGPL-2.1-or-later
-// Copyright (C) 2024 - by the deal.II authors
+// Copyright (C) 2021 by the deal.II authors
 //
-// Author: Peter Munch, 2024, Uppsala University
+// This file is part of the deal.II library.
 //
-// Solve Poisson problem
-//   -Δu = f
-// on different meshes.
+// The deal.II library is free software; you can use it, redistribute
+// it, and/or modify it under the terms of the GNU Lesser General
+// Public License as published by the Free Software Foundation; either
+// version 2.1 of the License, or (at your option) any later version.
+// The full text of the license can be found in the file LICENSE.md at
+// the top level directory of deal.II.
 //
-//
-// The first set are 2D Kershew meshes with different anisotropy.
-// The setup is adopted from Phillips, M. and Fischer, P., 2022.
-// Optimal chebyshev smoothers and one-sided v-cycles.
-//
-// The manufactured solution is:
-//   u(x) := sin(π * x) * sin(π * y),
-// which also gives the Dirichlet boundary condition.
-//
-// The needed right-hand side function is:
-//   f(x) := 2 * π^2 * u(x).
-//
-//
-// The second geometry is an L-shaped domain. No right-hand-side function
-// is used (f:=0) and the manufactored solution polar coordinates is:
-//   u(r, φ) := r^(2/3) * sin(2/3 * φ).
-//
-// ------------------------------------------------------------------------
+// ---------------------------------------------------------------------
 
 #include <deal.II/base/conditional_ostream.h>
 #include <deal.II/base/convergence_table.h>
@@ -58,59 +43,6 @@
 using namespace dealii;
 
 
-struct Parameters
-{
-  // general
-  unsigned int dim         = 2;
-  unsigned int fe_degree_p = 1;
-  unsigned int fe_degree_v = 2;
-
-  // mesh
-  unsigned int mapping_degree = 3;
-  unsigned int n_refinements  = 4;
-  double       eps            = 0.3;
-
-  // experiments
-  bool compute_error_solution = true;
-  bool output_paraview        = true;
-
-  void
-  parse(const std::string file_name)
-  {
-    if (file_name == "")
-      return;
-
-    dealii::ParameterHandler prm;
-    add_parameters(prm);
-
-    prm.parse_input(file_name, "", true);
-  }
-
-private:
-  void
-  add_parameters(ParameterHandler &prm)
-  {
-    // system
-    prm.enter_subsection("system");
-    prm.add_parameter("dim", dim);
-    prm.add_parameter("fe degree v", fe_degree_v);
-    prm.add_parameter("fe degree p", fe_degree_p);
-    prm.leave_subsection();
-
-    // geometry parameters
-    prm.enter_subsection("geometry");
-    prm.add_parameter("n refinements", n_refinements);
-    prm.leave_subsection();
-
-    // settings of experiments
-    prm.enter_subsection("experiments");
-    prm.add_parameter("output paraview", output_paraview);
-    prm.add_parameter("compute error solution", compute_error_solution);
-    prm.leave_subsection();
-  }
-};
-
-
 
 int
 main(int argc, char **argv)
@@ -119,8 +51,11 @@ main(int argc, char **argv)
 
   using Number = double;
   const unsigned int dim = 2;
-
-  Parameters params;
+  const unsigned int fe_degree_p = 1;
+  const unsigned int fe_degree_v = 2;
+  const unsigned int n_refinements  = 4;
+  const bool compute_error_solution = true;
+  const bool output_paraview        = true;
 
   ConvergenceTable table;
 
@@ -133,11 +68,11 @@ main(int argc, char **argv)
                            Utilities::MPI::this_mpi_process(comm) == 0);
 
   MappingQ1<dim> mapping;
-  FESystem<dim>  fe(FE_Q<dim>(params.fe_degree_v),
+  FESystem<dim>  fe(FE_Q<dim>(fe_degree_v),
                    dim,
-                   FE_Q<dim>(params.fe_degree_p),
+                   FE_Q<dim>(fe_degree_p),
                    1);
-  QGauss<dim>    quadrature(params.fe_degree_v + 1);
+  QGauss<dim>    quadrature(fe_degree_v + 1);
 
   parallel::distributed::Triangulation<dim> triangulation(comm);
 
@@ -199,7 +134,7 @@ main(int argc, char **argv)
   // create mesh
 
   GridGenerator::hyper_cube(triangulation, -1.0, 1.0);
-  triangulation.refine_global(params.n_refinements);
+  triangulation.refine_global(n_refinements);
 
 
   // create DoFHandler and constraints
@@ -207,13 +142,13 @@ main(int argc, char **argv)
   dof_handler.distribute_dofs(fe);
 
   table.add_value("dim", dim);
-  table.add_value("k_u", params.fe_degree_v);
-  table.add_value("k_p", params.fe_degree_p);
-  table.add_value("l", params.n_refinements);
+  table.add_value("k_u", fe_degree_v);
+  table.add_value("k_p", fe_degree_p);
+  table.add_value("l", n_refinements);
   table.add_value("#c", triangulation.n_global_active_cells());
   table.add_value("#d", dof_handler.n_dofs());
 
-  table.add_value("dx", 2.0 / Utilities::pow(2, params.n_refinements));
+  table.add_value("dx", 2.0 / Utilities::pow(2, n_refinements));
 
   AffineConstraints<double> constraints;
   constraints.reinit(DoFTools::extract_locally_relevant_dofs(dof_handler));
@@ -242,7 +177,7 @@ main(int argc, char **argv)
   FEValuesViews::Vector<dim> velocities(fe_values, 0);
   FEValuesViews::Scalar<dim> pressure(fe_values, dim);
 
-  if (params.fe_degree_v == params.fe_degree_p)
+  if (fe_degree_v == fe_degree_p)
     for (const auto &cell : dof_handler.active_cell_iterators())
       if (cell->is_locally_owned())
         {
@@ -291,7 +226,7 @@ main(int argc, char **argv)
 
         cell->get_dof_indices(indices);
 
-        const double delta_1 = (params.fe_degree_v == params.fe_degree_p) ?
+        const double delta_1 = (fe_degree_v == fe_degree_p) ?
                                  cell->minimum_vertex_distance() :
                                  0.0;
 
@@ -328,7 +263,7 @@ main(int argc, char **argv)
   solver.solve(system_matrix, solution, rhs);
 
   // compute error
-  if (params.compute_error_solution)
+  if (compute_error_solution)
     {
       const ComponentSelectFunction<dim> u_mask(std::make_pair(0, dim),
                                                 dim + 1);
@@ -377,7 +312,7 @@ main(int argc, char **argv)
 
 
   // paraview
-  if (params.output_paraview)
+  if (output_paraview)
     {
       DataOutBase::VtkFlags flags;
       if (dim > 1)
@@ -406,7 +341,7 @@ main(int argc, char **argv)
       // add expected solution
       DoFHandler<dim> dof_handler_solution(triangulation);
       dof_handler_solution.distribute_dofs(FESystem<dim>(
-        FE_Q<dim>(params.fe_degree_v), dim, FE_Q<dim>(params.fe_degree_p), 1));
+        FE_Q<dim>(fe_degree_v), dim, FE_Q<dim>(fe_degree_p), 1));
 
       LinearAlgebra::distributed::Vector<double> analytical_solution(
         std::make_shared<const Utilities::MPI::Partitioner>(
@@ -430,7 +365,7 @@ main(int argc, char **argv)
       // write data
       data_out.build_patches(
         mapping,
-        params.fe_degree_v,
+        fe_degree_v,
         DataOut<dim>::CurvedCellRegion::curved_inner_cells);
       data_out.write_vtu_in_parallel("stokes.vtu", comm);
     }
